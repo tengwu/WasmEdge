@@ -22,7 +22,9 @@
 #include "ast/description.h"
 #include "ast/segment.h"
 
+#include <cstdint>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 namespace WasmEdge {
@@ -47,8 +49,18 @@ protected:
   uint64_t StartOffset = 0;
 };
 
+enum NameID {
+  ModuleNameID = 0x0,
+  FuncNameID,
+  LocalNameID,
+  NameIDEnd
+};
+
+using NamesMap = std::unordered_map<uint32_t, std::string>; 
+
 /// AST CustomSection node.
 class CustomSection : public Section {
+  NamesMap Names[NameIDEnd];
 public:
   /// Getter and setter of name.
   std::string_view getName() const noexcept { return Name; }
@@ -57,6 +69,26 @@ public:
   /// Getter of content vector.
   Span<const Byte> getContent() const noexcept { return Content; }
   std::vector<Byte> &getContent() noexcept { return Content; }
+
+  void insertName(NameID ID, uint32_t Index,
+                  std::string &Name) noexcept {
+    Names[ID].insert({Index, Name});
+  }
+  bool hasAnyName(NameID ID) const noexcept {
+    return !Names[ID].empty();
+
+  }
+  const NamesMap &getNames(NameID ID) const noexcept {
+    return Names[ID];
+  }
+  std::string_view getName(NameID ID, uint32_t Index) const noexcept {
+    auto It = Names[ID].find(Index);
+    if (It != Names[ID].end()) {
+      return It->second;
+    } else {
+      return std::string_view();
+    }
+  }
 
 private:
   /// \name Data of CustomSection.
@@ -96,10 +128,26 @@ private:
 
 /// AST FunctionSection node.
 class FunctionSection : public Section {
+  NamesMap FuncNames;
 public:
   /// Getter of content vector.
   Span<const uint32_t> getContent() const noexcept { return Content; }
   std::vector<uint32_t> &getContent() noexcept { return Content; }
+
+  /// Getter and setter of function name.
+  void setFuncNames(const NamesMap &FuncNames) noexcept {
+    for (const auto &It : FuncNames) {
+      this->FuncNames.insert({It.first, It.second});
+    }
+  }
+  std::string_view getFuncName(uint32_t FuncIdx) const noexcept {
+    auto It = FuncNames.find(FuncIdx);
+    if (It != FuncNames.end()) {
+      return It->second;
+    } else {
+      return std::string_view();
+    }
+  }
 
 private:
   /// \name Data of FunctionSection.

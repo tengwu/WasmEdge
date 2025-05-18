@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2019-2024 Second State INC
 
+#include "ast/section.h"
 #include "common/configure.h"
 #include "common/defines.h"
 #include "common/filesystem.h"
@@ -12,6 +13,7 @@
 #include "llvm/compiler.h"
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -113,6 +115,32 @@ int Compiler([[maybe_unused]] struct DriverCompilerOptions &Opt) noexcept {
   std::unique_ptr<AST::Module> Module;
   if (auto Res = Loader.parseModule(Data)) {
     Module = std::move(*Res);
+    for (auto &NameSec : Module->getCustomSections()) {
+      if (NameSec.getName() == "name") {
+        auto &FuncNames = NameSec.getNames(AST::FuncNameID);
+        if (FuncNames.size() > 0) {
+          // Dump the function name mapping.
+          auto DumpFuncNames = [&] {
+            std::string FuncNameFilePath =
+                std::string() + OutputPath.c_str() + ".funcmap";
+            // spdlog::info("Dump function name mapping to file {}",
+            // FuncNameFilePath);
+            std::ofstream FuncNameFile(FuncNameFilePath, std::ios::out);
+            if (!FuncNameFile) {
+              spdlog::error(ErrCode::Value::IllegalPath);
+              spdlog::error(ErrInfo::InfoFile(FuncNameFilePath));
+              return;
+            }
+            for (const auto &FuncName : FuncNames) {
+              FuncNameFile << 'f' << FuncName.first << " " << FuncName.second
+                           << "\n";
+            }
+            FuncNameFile.close();
+          };
+          DumpFuncNames();
+        }
+      }
+    }
   } else {
     const auto Err = static_cast<uint32_t>(Res.error());
     spdlog::error("Parse Module failed. Error code: {}"sv, Err);

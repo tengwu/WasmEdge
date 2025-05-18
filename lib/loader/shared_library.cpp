@@ -10,6 +10,7 @@
 #include <cstring>
 #include <tuple>
 #include <utility>
+#include <fstream>
 
 #if WASMEDGE_OS_WINDOWS
 #include "system/winapi.h"
@@ -29,6 +30,25 @@ Expect<void> SharedLibrary::load(const std::filesystem::path &Path) noexcept {
   Handle = winapi::LoadLibraryExW(Path.c_str(), nullptr, 0);
 #else
   Handle = ::dlopen(Path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+  // Initialize function name map.
+  auto FuncMapPath = Path;
+  FuncMapPath += ".funcmap";
+  // If FuncMapPath exists.
+  if (std::filesystem::exists(FuncMapPath)) {
+    std::ifstream FuncMapFile(FuncMapPath, std::ios::in | std::ios::binary);
+    if (!FuncMapFile) {
+      spdlog::error(ErrCode::Value::IllegalPath);
+      return Unexpect(ErrCode::Value::IllegalPath);
+    }
+    // Read function name map.
+    std::string Line;
+    while (std::getline(FuncMapFile, Line)) {
+      auto Pos = Line.find_first_of(' ');
+      if (Pos != std::string::npos) {
+        FuncNameMap[Line.substr(0, Pos)] = Line.substr(Pos + 1);
+      }
+    }
+  }
 #endif
   if (!Handle) {
     spdlog::error(ErrCode::Value::IllegalPath);

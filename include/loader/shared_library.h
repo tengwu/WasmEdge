@@ -21,6 +21,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace WasmEdge {
@@ -28,6 +30,7 @@ namespace Loader {
 
 /// Holder class for library handle
 class SharedLibrary : public Executable {
+  std::unordered_map<std::string, std::string> FuncNameMap;
 public:
 #if WASMEDGE_OS_WINDOWS
   using NativeHandle = winapi::HMODULE_;
@@ -67,7 +70,12 @@ public:
     for (size_t I = 0; I < Size; ++I) {
       // "f" prefix is for code function
       const std::string Name = fmt::format("f{}"sv, I + Offset);
-      if (auto Symbol = get<void>(Name.c_str())) {
+      // Map name 'fXX' to a readable name by debug names
+      std::string RealName = Name;
+      if (auto It = FuncNameMap.find(Name); It != FuncNameMap.end()) {
+        RealName = It->second;
+      }
+      if (auto Symbol = get<void>(RealName.c_str())) {
         Result.push_back(std::move(Symbol));
       }
     }

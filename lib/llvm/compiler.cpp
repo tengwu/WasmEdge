@@ -4,6 +4,7 @@
 #include "llvm/compiler.h"
 
 #include "aot/version.h"
+#include "ast/section.h"
 #include "common/defines.h"
 #include "common/filesystem.h"
 #include "common/spdlog.h"
@@ -5939,6 +5940,7 @@ Expect<Data> Compiler::compile(const AST::Module &Module) noexcept {
           LLVMRelocPIC, LLVMCodeModelDefault);
     }
 
+#if WASMEDGE_AOT_ENABLE_OPTIMIZE
 #if LLVM_VERSION_MAJOR >= 13
     auto PBO = LLVM::PassBuilderOptions::create();
     if (auto Error = PBO.runPasses(
@@ -5978,6 +5980,7 @@ Expect<Data> Compiler::compile(const AST::Module &Module) noexcept {
     FP.finalizeFunctionPassManager();
     MP.runPassManager(LLModule);
 #endif
+#endif  // WASMEDGE_AOT_ENABLE_OPTIMIZE
   }
 
   // Set initializer for constant value
@@ -6298,9 +6301,13 @@ void Compiler::compile(const AST::FunctionSection &FuncSec,
     const auto &FuncType = Context->CompositeTypes[TypeIdx]->getFuncType();
     const auto FuncID = Context->Functions.size();
     auto FTy = toLLVMType(Context->LLContext, Context->ExecCtxPtrTy, FuncType);
+    std::string FuncName = fmt::format("f{}"sv, FuncID);
+    if (auto FuncNameDbg = FuncSec.getFuncName(FuncID); FuncNameDbg != "") {
+      FuncName = FuncNameDbg;
+    }
     LLVM::FunctionCallee F = {FTy, Context->LLModule.addFunction(
                                        FTy, LLVMExternalLinkage,
-                                       fmt::format("f{}"sv, FuncID).c_str())};
+                                       FuncName.c_str())};
     F.Fn.setVisibility(LLVMProtectedVisibility);
     F.Fn.setDSOLocal(true);
     F.Fn.setDLLStorageClass(LLVMDLLExportStorageClass);

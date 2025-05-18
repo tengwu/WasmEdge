@@ -10,6 +10,11 @@ include(AddLLVM)
 get_filename_component(LLD_DIR "${LLVM_LIBRARY_DIR}/cmake/lld" ABSOLUTE)
 find_package(LLD REQUIRED HINTS ${LLD_DIR})
 
+if(WASMEDGE_AOT_ENABLE_OPTIMIZE)
+  message(STATUS "AOT optimization is enabled.")
+  add_definitions(-DWASMEDGE_AOT_ENABLE_OPTIMIZE)
+endif()
+
 if(WASMEDGE_LINK_LLVM_STATIC)
   wasmedge_add_library(wasmedgeLLVM
     compiler.cpp

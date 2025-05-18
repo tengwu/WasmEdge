@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2019-2024 Second State INC
 
+#include "ast/section.h"
+#include "common/enum_errcode.hpp"
 #include "loader/loader.h"
 
 #include "aot/version.h"
 #include "common/defines.h"
 #include "spdlog/spdlog.h"
+#include <cassert>
 #include <cstdint>
 #include <tuple>
 #include <utility>
@@ -38,6 +41,45 @@ Expect<void> Loader::loadSection(AST::CustomSection &Sec) {
     } else {
       return logLoadError(Res.error(), FMgr.getLastOffset(),
                           ASTNodeAttr::Sec_Custom);
+    }
+    // Parse debug names from custom sections.
+    auto GetLEB128 = [](const std::vector<Byte> &RawData, size_t &Offset) {
+      uint32_t Res = 0;
+      for (size_t I = Offset; I < RawData.size(); I++) {
+        Res |= (RawData[I] & 0x7F) << ((I - Offset) * 7);
+        if ((RawData[I] & 0x80) == 0) {
+          Offset += I - Offset + 1;
+          return Res;
+        }
+      }
+      return std::numeric_limits<uint32_t>::max();
+    };
+    if (Sec.getName() == "name") {
+      auto &RawData = Sec.getContent();
+      for (size_t I = 0; I < RawData.size();) {
+        unsigned char ID = RawData[I++];
+        assert(ID == 0x0 || ID == 0x1 || ID == 0x2);
+
+        uint32_t ContentsLen = GetLEB128(RawData, I); // RawData[I++]; //
+        if (ID == AST::NameID::ModuleNameID) {
+          I += ContentsLen;
+          continue;
+        }
+        size_t ItemSize = GetLEB128(RawData, I); // RawData[I++]; //
+        for (size_t ItemIdx = 0; ItemIdx < ItemSize; ItemIdx++) {
+          uint32_t ItemID = GetLEB128(RawData, I); // RawData[I++]; //
+          size_t ItemLen = GetLEB128(RawData, I); // RawData[I++]; //
+          std::string Str = "";
+          for (size_t Idx = 0; Idx < ItemLen; Idx++) {
+            Str += RawData[I++];
+          }
+          // Append the name to the section.
+          Sec.insertName((AST::NameID) ID, ItemID, Str);
+          // spdlog::info("name -- {}: {}: {}"sv, ID, ItemID, Str);
+        }
+        // TODO: Now, we only parse Function Name ID.
+        if (ID == AST::NameID::FuncNameID) break;
+      }
     }
     return {};
   });

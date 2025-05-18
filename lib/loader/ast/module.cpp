@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2019-2024 Second State INC
 
+#include "ast/section.h"
 #include "loader/aot_section.h"
 #include "loader/loader.h"
 #include "loader/shared_library.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <fmt/format.h>
 #include <memory>
 #include <optional>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -56,14 +60,18 @@ Expect<void> Loader::loadModuleInBound(AST::Module &Mod,
     }
 
     switch (NewSectionId) {
-    case 0x00:
+    case 0x00: {
       Mod.getCustomSections().emplace_back();
       EXPECTED_TRY(
           loadSection(Mod.getCustomSections().back()).map_error([](auto E) {
             spdlog::error(ErrInfo::InfoAST(ASTNodeAttr::Module));
             return E;
           }));
+      auto &FuncNames =
+          Mod.getCustomSections().back().getNames(AST::NameID::FuncNameID);
+      Mod.getFunctionSection().setFuncNames(FuncNames);
       break;
+    }
     case 0x01:
       EXPECTED_TRY(loadSection(Mod.getTypeSection()).map_error([](auto E) {
         spdlog::error(ErrInfo::InfoAST(ASTNodeAttr::Module));
